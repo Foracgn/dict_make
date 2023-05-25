@@ -12,44 +12,55 @@ from neko_sdk.ocr_modules.renderlite.lib_render import render_lite
 import oracle_dict
 
 
-def AddImage(path, database):
-    with open(path, "r") as f:
-        for one in f:
-            image = cv2.imread(one)
-            database.adddata_kv(
-                {
-                    "image:": image,
-                },
-                {
-                    "label": one,
-                    "lang": "Chinese",
-                    "attr": ""
-                },
-                {}
-            )
+def AddImage(dataset, label, database):
+    path = dataset + "/" + label
+    images = os.listdir(path)
+
+    for i in range(0, len(images)):
+        one = images[i]
+        image = cv2.imread(path + "/" + one)
+        database.adddata_kv(
+            {
+                "image:": image,
+            },
+            {
+                "label": "u"+label.lower(),
+                "lang": "Chinese",
+            },
+            {}
+        )
 
 
-def makeDatabase(database, image):
+def makeDatabase(database, image, counter=-1):
     shutil.rmtree(database, True)
     db = im_lmdb_wrapper.im_lmdb_wrapper(database)
 
-    with open(image, "r") as fp:
-        for subFolder in fp:
-            if subFolder in oracle_dict.servant:
-                AddImage(subFolder, db)
+    folders = os.listdir(image)
+    folderCounter = 0
+
+    for folder in folders:
+        if folder not in oracle_dict.servant:
+            continue
+        folderCounter += 1
+        AddImage(image, folder, db)
+        counter -= 1
+        if counter == 0:
+            break
     db.end_this()
 
 
-def get_ds(root, filter=True):
+def get_ds(root, counter, filter=True):
     charset = {}
     db = neko_ocr_lmdb_mgmt(root, not filter, 1000)
     for i in range(len(db)):
         _, t = db.getitem_encoded_im(i)
         try:
-            for c in regex.findall(r'\X', t, regex.U):
-                if c not in charset:
-                    charset[c] = 0
-                charset[c] += 1
+            if t[0] == 'u' and t[1] == '6':
+                if t not in charset:
+                    charset[t] = 0
+                charset[t] += 1
+            if len(charset) == counter:
+                break
         except:
             print(t)
             pass
@@ -58,13 +69,13 @@ def get_ds(root, filter=True):
     return charset
 
 
-def makept(dataset, font, protodst, xdst, blacklist, servants="QWERTYUIOPASDFGHJKLZXCVBNM",
+def makept(dataset, font, counter, protodst, xdst, blacklist, servants="QWERTYUIOPASDFGHJKLZXCVBNM",
            masters="qwertyuiopasdfghjklzxcvbnm", space=None):
     if dataset is not None:
         if space is not None:
-            chrset = list(set(xdst.union(get_ds(dataset, False))).difference(blacklist).intersection(space))
+            chrset = list(set(xdst.union(get_ds(dataset, counter, False))).difference(blacklist).intersection(space))
         else:
-            chrset = list(set(xdst.union(get_ds(dataset, False))).difference(blacklist))
+            chrset = list(set(xdst.union(get_ds(dataset, counter, False))).difference(blacklist))
     else:
         chrset = list(set(xdst).difference(blacklist))
     engine = render_lite(os=84, fos=32)
@@ -81,9 +92,9 @@ def makept(dataset, font, protodst, xdst, blacklist, servants="QWERTYUIOPASDFGHJ
     return chrset
 
 
-def buildDict(db, font):
-    path = os.path.join(db, "*.mdb")
-    makept(path, font, os.path.join(path, "dict.pt"), set(), set(), servants="", masters="")
+def buildDict(db, font, counter=-1):
+    path = db
+    makept(path, font, counter, os.path.join(path, "dict.pt"), set(), set(), servants="", masters="")
 
 
 if __name__ == '__main__':
@@ -91,5 +102,5 @@ if __name__ == '__main__':
     databasePath = "./packs/oracle"
     imagePath = "./sample"
 
-    makeDatabase(databasePath, imagePath)
-    buildDict(databasePath, fontPath)
+    makeDatabase(databasePath, imagePath, counter=500)
+    buildDict(databasePath, fontPath, counter=400)
