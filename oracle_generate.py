@@ -9,6 +9,7 @@ import regex
 from neko_sdk.lmdb_wrappers.ocr_lmdb_reader import neko_ocr_lmdb_mgmt
 from neko_sdk.ocr_modules.renderlite.addfffh import refactor_meta, add_masters, finalize
 from neko_sdk.ocr_modules.renderlite.lib_render import render_lite
+import oracle_dict
 
 
 def AddImage(path, database):
@@ -34,7 +35,8 @@ def makeDatabase(database, image):
 
     with open(image, "r") as fp:
         for subFolder in fp:
-            AddImage(subFolder, db)
+            if subFolder in oracle_dict.servant:
+                AddImage(subFolder, db)
     db.end_this()
 
 
@@ -72,8 +74,7 @@ def makept(dataset, font, protodst, xdst, blacklist, servants="QWERTYUIOPASDFGHJ
     # inject a shapeless UNK.
     meta["protos"].append(None)
     meta["achars"].append("[UNK]")
-    if len(masters):
-        add_masters(meta, servants, masters)
+    add_masters(meta, oracle_dict.servant, oracle_dict.master)
     # add_masters(meta,servants,masters);
     meta = finalize(meta)
     torch.save(meta, protodst)
